@@ -1,5 +1,7 @@
 package com.john.payment.payment.adapters.`in`.web
 
+import com.john.payment.common.dto.BaseResponse
+import com.john.payment.payment.adapters.`in`.web.dto.PaymentInput
 import com.john.payment.payment.application.port.`in`.ReadyUseCase
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -15,12 +17,23 @@ class PaymentController(
 ) {
 
     @GetMapping("/pay/ready/{state}")
-    fun ready(@PathVariable state: String) {
-        readyUseCase.ready(state)
+    fun ready(@PathVariable state: String, input: PaymentInput): BaseResponse {
+        val result = readyUseCase.ready(state, input)
+        return BaseResponse().success(result)
     }
 
     @GetMapping("/pay/approve/{state}")
     fun approve(@PathVariable state: String) {
+
+    }
+
+    @GetMapping("/pay/fail/{state}")
+    fun fail(@PathVariable state: String) {
+
+    }
+
+    @GetMapping("/pay/cancel/{state}")
+    fun cancel(@PathVariable state: String) {
 
     }
 }

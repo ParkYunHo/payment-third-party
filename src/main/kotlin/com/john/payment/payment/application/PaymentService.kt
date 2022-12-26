@@ -1,6 +1,7 @@
 package com.john.payment.payment.application
 
 import com.john.payment.common.exception.BadRequestException
+import com.john.payment.payment.adapters.`in`.web.dto.PaymentInput
 import com.john.payment.payment.application.port.`in`.ReadyUseCase
 import com.john.payment.payment.application.port.out.PaymentPort
 import org.springframework.stereotype.Service
@@ -14,9 +15,9 @@ class PaymentService(
     private val paymentPorts: List<PaymentPort>
 ): ReadyUseCase {
 
-    override fun ready(state: String) {
-        this.findPaymentPort(state)
-            .ready()
+    override fun ready(state: String, input: PaymentInput): Any {
+        return this.findPaymentPort(state)
+                    .ready(input)
     }
 
     private fun findPaymentPort(state: String) =

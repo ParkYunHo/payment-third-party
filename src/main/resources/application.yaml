@@ -1,4 +1,9 @@
 payment:
+  domain: http://localhost:8080
+  conn:
+    user-agent: third-party-payment
+    read-timeout: 3000
+    connect-timeout: 3000
   apis:
     kakao: https://kapi.kakao.com
   keys:

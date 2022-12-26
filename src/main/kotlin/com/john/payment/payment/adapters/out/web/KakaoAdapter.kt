@@ -3,8 +3,9 @@ package com.john.payment.payment.adapters.out.web
 import com.john.payment.common.constants.CommCode
 import com.john.payment.common.exception.BadRequestException
 import com.john.payment.common.exception.InternalServerErrorException
+import com.john.payment.payment.adapters.`in`.web.dto.PaymentInput
+import com.john.payment.payment.adapters.out.web.dto.KakaoReadyInfo
 import com.john.payment.payment.application.port.out.PaymentPort
-import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
@@ -21,10 +22,12 @@ import org.springframework.web.util.UriComponentsBuilder
  */
 @Component
 class KakaoAdapter(
-    private val webClientBuilder: WebClient.Builder
+    private val kapiWebClient: WebClient
 ): PaymentPort {
     private val log = LoggerFactory.getLogger(this::class.java)
-    private lateinit var webClient: WebClient
+
+    @Value("\${payment.domain}")
+    private lateinit var domain: String
 
     @Value("\${payment.apis.kakao}")
     private lateinit var url: String
@@ -32,12 +35,7 @@ class KakaoAdapter(
     @Value("\${payment.keys.kakao}")
     private lateinit var adminKey: String
 
-    @PostConstruct
-    fun initWebClient() {
-        this.webClient = webClientBuilder.build()
-    }
-
-    override fun ready() {
+    override fun ready(input: PaymentInput): Any {
         try{
             val uriComponents = UriComponentsBuilder
                 .fromHttpUrl(url + "/v1/payment/ready")
@@ -47,19 +45,17 @@ class KakaoAdapter(
             params.add("cid", "TC0ONETIME")
             params.add("partner_order_id", "partner_order_id")
             params.add("partner_user_id", "partner_user_id")
-            params.add("item_name", "초코파이")
-            params.add("quantity", "1")
-            params.add("total_amount", "2200")
-            params.add("vat_amount", "200")
-            params.add("tax_free_amount", "0")
-            // TEST
-            params.add("approval_url", "http://localhost:8080/success")
-            params.add("fail_url", "http://localhost:8080/success")
-            params.add("cancel_url", "http://localhost:8080/success")
-            //
+            params.add("item_name", input.itemName)
+            params.add("quantity", input.quantity.toString())
+            params.add("total_amount", input.totalAmount.toString())
+            params.add("vat_amount", input.vat.toString())
+            params.add("tax_free_amount", input.taxFree.toString())
+            params.add("approval_url", domain + "/pay/approve/" + CommCode.Social.KAKAO.code)
+            params.add("fail_url", domain + "/pay/fail/" + CommCode.Social.KAKAO.code)
+            params.add("cancel_url", domain + "/pay/cancel/" + CommCode.Social.KAKAO.code)
 
             log.info(" >>> [ready] request - url: {}, body: {}", uriComponents.toUriString(), params.toString())
-            val response = webClient.post()
+            val response = kapiWebClient.post()
                 .uri(uriComponents.toUri())
                 .header("Authorization", "KakaoAK " + adminKey)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -68,14 +64,15 @@ class KakaoAdapter(
                     if(response.statusCode().is4xxClientError) {
                         throw BadRequestException("카카오 결제페이지를 불러오는데 실패하였습니다.")
                     }else if(response.statusCode().is5xxServerError) {
-                        throw InternalServerErrorException()
+                        throw InternalServerErrorException("일시적으로 카카오페이 서버를 이용할 수 없습니다.")
                     }else{
-                        return@exchangeToMono response.toEntity(String::class.java)
+                        return@exchangeToMono response.toEntity(KakaoReadyInfo::class.java)
                     }
                 }
                 .block()
             log.info(" >>> [ready] response - body: {}, status: {}", response.body, response.statusCode)
 
+            return response.body
         }catch (be: BadRequestException) {
             log.info(">>> [ready] BadRequestException - message: {}", be.message)
             throw be
