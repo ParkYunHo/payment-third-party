@@ -29,6 +29,9 @@ class WebClientConfig {
             }
 
         val connector = ReactorClientHttpConnector(HttpClient.from(tcpClient))
-        return WebClient.builder().clientConnector(connector).build()
+        return WebClient.builder()
+            .defaultHeader("User-Agent", "Third-party Payment")
+            .clientConnector(connector)
+            .build()
     }
 }
