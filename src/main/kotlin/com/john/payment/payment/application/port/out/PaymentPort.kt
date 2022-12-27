@@ -1,6 +1,5 @@
 package com.john.payment.payment.application.port.out
 
-import com.john.payment.payment.adapters.`in`.web.dto.ApproveInput
 import com.john.payment.payment.adapters.`in`.web.dto.PaymentInput
 
 /**
@@ -9,6 +8,6 @@ import com.john.payment.payment.adapters.`in`.web.dto.PaymentInput
  */
 interface PaymentPort {
     fun ready(input: PaymentInput): Any
-    fun approve(input: ApproveInput): Any
+    fun approve(pgToken: String, orderId: String): Any
     fun support(state: String): Boolean
 }

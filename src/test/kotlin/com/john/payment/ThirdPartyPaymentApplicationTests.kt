@@ -1,13 +1,11 @@
 package com.john.payment
 
-import org.junit.jupiter.api.Test
-import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.runApplication
 
-@SpringBootTest
-class ThirdPartyPaymentApplicationTests {
+@SpringBootApplication
+class ThirdPartyPaymentApplicationTests
 
-    @Test
-    fun contextLoads() {
-    }
-
+fun main(args: Array<String>) {
+    runApplication<ThirdPartyPaymentApplicationTests>(*args)
 }

@@ -3,13 +3,16 @@ package com.john.payment.payment.adapters.out.web
 import com.john.payment.common.constants.CommCode
 import com.john.payment.common.exception.BadRequestException
 import com.john.payment.common.exception.InternalServerErrorException
-import com.john.payment.payment.adapters.`in`.web.dto.ApproveInput
+import com.john.payment.common.exception.PaymentTimeoutException
+import com.john.payment.payment.adapters.out.web.dto.KakaoCacheInfo
 import com.john.payment.payment.adapters.`in`.web.dto.PaymentInput
 import com.john.payment.payment.adapters.out.web.dto.KakaoApproveInfo
 import com.john.payment.payment.adapters.out.web.dto.KakaoReadyInfo
 import com.john.payment.payment.application.port.out.PaymentPort
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.cache.CacheManager
+import org.springframework.cache.annotation.CachePut
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
@@ -24,7 +27,8 @@ import org.springframework.web.util.UriComponentsBuilder
  */
 @Component
 class KakaoAdapter(
-    private val kapiWebClient: WebClient
+    private val kapiWebClient: WebClient,
+    private val cacheManager: CacheManager
 ): PaymentPort {
     private val log = LoggerFactory.getLogger(this::class.java)
 
@@ -44,17 +48,17 @@ class KakaoAdapter(
                 .build(false)
 
             val params: MultiValueMap<String, String> = LinkedMultiValueMap()
-            params.add("cid", "TC0ONETIME")
-            params.add("partner_order_id", "partner_order_id")
-            params.add("partner_user_id", "partner_user_id")
+            params.add("cid", input.cid)
+            params.add("partner_order_id", input.orderId)
+            params.add("partner_user_id", input.userId)
             params.add("item_name", input.itemName)
             params.add("quantity", input.quantity.toString())
             params.add("total_amount", input.totalAmount.toString())
             params.add("vat_amount", input.vat.toString())
             params.add("tax_free_amount", input.taxFree.toString())
-            params.add("approval_url", domain + "/pay/approve/" + CommCode.Social.KAKAO.code + "/testPgToken")
-            params.add("fail_url", domain + "/pay/fail/" + CommCode.Social.KAKAO.code + "/testPgToken")
-            params.add("cancel_url", domain + "/pay/cancel/" + CommCode.Social.KAKAO.code + "/testPgToken")
+            params.add("approval_url", domain + "/pay/approve/" + CommCode.Social.KAKAO.code + "/" + input.orderId)
+            params.add("fail_url", domain + "/pay/fail/" + CommCode.Social.KAKAO.code + "/" + input.orderId)
+            params.add("cancel_url", domain + "/pay/cancel/" + CommCode.Social.KAKAO.code + "/" + input.orderId)
 
             log.info(" >>> [ready] request - url: {}, body: {}", uriComponents.toUriString(), params.toString())
             val response = kapiWebClient.post()
@@ -84,23 +88,25 @@ class KakaoAdapter(
         }
     }
 
-    override fun approve(input: ApproveInput): KakaoApproveInfo {
+    override fun approve(pgToken: String, orderId: String): KakaoApproveInfo {
         try{
+            // 캐시에 저장한 ready정보 조회
+            val cache = cacheManager.getCache("KAKAO")
+            val readyInfo = cache.get(orderId, KakaoCacheInfo::class.java)
+                ?: throw PaymentTimeoutException("결제 가능한 시간을 초과하였습니다.")
+            //
+
             val uriComponents = UriComponentsBuilder
                 .fromHttpUrl(url + "/v1/payment/approve")
                 .build(false)
 
             val params: MultiValueMap<String, String> = LinkedMultiValueMap()
-            params.add("cid", "TC0ONETIME")
-            if(!input.cidSecret.isNullOrEmpty()) {
-                params.add("cid_secret", input.cidSecret)
-            }
-            params.add("tid", input.tid)
-            params.add("partner_order_id", "partner_order_id")
-            params.add("partner_user_id", "partner_user_id")
-            params.add("pg_token", input.pgToken)
-            params.add("payload", "")
-            params.add("total_amount", input.totalAmount)
+            params.add("cid", readyInfo.cid)
+            params.add("tid", readyInfo.tid)
+            params.add("partner_order_id", readyInfo.orderId)
+            params.add("partner_user_id", readyInfo.userId)
+            params.add("pg_token", pgToken)
+            params.add("total_amount", readyInfo.totalAmount.toString())
 
             log.info(" >>> [approve] request - url: {}, body: {}", uriComponents.toUriString(), params.toString())
             val response = kapiWebClient.post()
@@ -121,6 +127,9 @@ class KakaoAdapter(
             log.info(" >>> [approve] response - body: {}, status: {}", response.body, response.statusCode)
 
             return response.body
+        }catch (pe: PaymentTimeoutException) {
+            log.info(">>> [approve] PaymentTimeoutException - message: {}", pe.message)
+            throw pe
         }catch (be: BadRequestException) {
             log.info(">>> [approve] BadRequestException - message: {}", be.message)
             throw be
@@ -131,4 +140,10 @@ class KakaoAdapter(
     }
 
     override fun support(state: String): Boolean = CommCode.Social.KAKAO.code.equals(state)
+
+    @CachePut(value = ["KAKAO"], key = "#input.orderId", unless = "#result == null")
+    fun setReadyInfo(input: KakaoCacheInfo): KakaoCacheInfo {
+        log.info(" >>> [setReadyInfo] Ready 정보 저장 - response: {}", input)
+        return input
+    }
 }

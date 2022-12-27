@@ -1,3 +1,9 @@
+spring:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+
 payment:
   domain: http://localhost:8080
   conn:
